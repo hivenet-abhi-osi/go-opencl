@@ -11,7 +11,7 @@ import "C"
 
 type Property C.cl_context_properties
 
-func GetInteropProperties() []Property {
+func GetInteropProperties(window GLFWHandle) []Property {
 	kCGLShareGroup := C.getSG()
 	return []Property{
 		Property(C.CL_CONTEXT_PROPERTY_USE_CGL_SHAREGROUP_APPLE), Property(kCGLShareGroup),
