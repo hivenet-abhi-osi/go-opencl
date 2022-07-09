@@ -45,11 +45,18 @@ func (b *MemObject) Release() {
 	releaseMemObject(b)
 }
 
-// TODO: properties
-func CreateContext(devices []*Device) (*Context, error) {
+func CreateContextWithProperties(devices []*Device, properties []Property) (*Context, error) {
 	deviceIds := buildDeviceIdList(devices)
+	terminatedProperties := append(properties, Property(0))
 	var err C.cl_int
-	clContext := C.clCreateContext(nil, C.cl_uint(len(devices)), &deviceIds[0], nil, nil, &err)
+	var clContext C.cl_context
+	var dataPtr = unsafe.Pointer(&terminatedProperties[0])
+	if properties != nil {
+		clContext = C.clCreateContext((*C.cl_context_properties)(dataPtr), C.cl_uint(len(devices)), &deviceIds[0], nil, nil, &err)
+	} else {
+		clContext = C.clCreateContext(nil, C.cl_uint(len(devices)), &deviceIds[0], nil, nil, &err)
+	}
+
 	if err != C.CL_SUCCESS {
 		return nil, toError(err)
 	}
@@ -59,6 +66,10 @@ func CreateContext(devices []*Device) (*Context, error) {
 	context := &Context{clContext: clContext, devices: devices}
 	runtime.SetFinalizer(context, releaseContext)
 	return context, nil
+}
+
+func CreateContext(devices []*Device) (*Context, error) {
+	return CreateContextWithProperties(devices, nil)
 }
 
 func (ctx *Context) GetSupportedImageFormats(flags MemFlag, imageType MemObjectType) ([]ImageFormat, error) {
@@ -133,6 +144,30 @@ func (ctx *Context) CreateBuffer(flags MemFlag, data []byte) (*MemObject, error)
 
 func (ctx *Context) CreateBufferFloat32(flags MemFlag, data []float32) (*MemObject, error) {
 	return ctx.CreateBufferUnsafe(flags, len(data)*4, unsafe.Pointer(&data[0]))
+}
+
+func (ctx *Context) CreateBufferFromGLRenderBuffer(flags MemFlag, buffer uint32, size int) (*MemObject, error) {
+	var err C.cl_int
+	clBuffer := C.clCreateFromGLRenderbuffer(ctx.clContext, C.cl_mem_flags(flags), C.cl_GLuint(buffer), &err)
+	if err != C.CL_SUCCESS {
+		return nil, toError(err)
+	}
+	if clBuffer == nil {
+		return nil, ErrUnknown
+	}
+	return newMemObject(clBuffer, size), nil
+}
+
+func (ctx *Context) CreateBufferFromGLTexture2D(flags MemFlag, texture uint32, size int) (*MemObject, error) {
+	var err C.cl_int
+	clBuffer := C.clCreateFromGLTexture(ctx.clContext, C.cl_mem_flags(flags), C.GL_TEXTURE_2D, 0, C.cl_GLuint(texture), &err)
+	if err != C.CL_SUCCESS {
+		return nil, toError(err)
+	}
+	if clBuffer == nil {
+		return nil, ErrUnknown
+	}
+	return newMemObject(clBuffer, size), nil
 }
 
 func (ctx *Context) CreateUserEvent() (*Event, error) {

@@ -111,10 +111,28 @@ func (q *CommandQueue) EnqueueReadBuffer(buffer *MemObject, blocking bool, offse
 	return newEvent(event), err
 }
 
+func (q *CommandQueue) EnqueueGLObject(buffer *MemObject) error {
+	err := toError(C.clEnqueueAcquireGLObjects(q.clQueue, C.cl_uint(1), (*C.cl_mem)(unsafe.Pointer(&buffer.clMem)), 0, nil, nil))
+	return err
+}
+
+func (q *CommandQueue) DequeueGLObject(buffer *MemObject) error {
+	err := toError(C.clEnqueueReleaseGLObjects(q.clQueue, C.cl_uint(1), (*C.cl_mem)(unsafe.Pointer(&buffer.clMem)), 0, nil, nil))
+	return err
+}
+
 func (q *CommandQueue) EnqueueReadBufferFloat32(buffer *MemObject, blocking bool, offset int, data []float32, eventWaitList []*Event) (*Event, error) {
 	dataPtr := unsafe.Pointer(&data[0])
 	dataSize := int(unsafe.Sizeof(data[0])) * len(data)
 	return q.EnqueueReadBuffer(buffer, blocking, offset, dataSize, dataPtr, eventWaitList)
+}
+
+func memToArray(mems []*MemObject) []C.cl_mem {
+	out := make([]C.cl_mem, len(mems))
+	for i := range mems {
+		out[i] = mems[i].clMem
+	}
+	return out
 }
 
 // EnqueueNDRangeKernel enqueues a command to execute a kernel on a device.
